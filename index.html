@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RuslTube</title>
+    <title>RuslTube Pro v23.2</title>
     <style>
         :root { --bg: #0f0f0f; --surf: #1f1f1f; --text: #fff; --red: #ff0000; --blue: #3ea6ff; --border: #333; --card-bg: #000; }
         body.light { --bg: #f9f9f9; --surf: #fff; --text: #0f0f0f; --border: #ddd; --card-bg: #eee; }
@@ -90,7 +90,7 @@
     <div id="homePage" class="page">
         <div id="searchChannels" style="display:none; gap:20px; overflow-x:auto; padding-bottom:15px; margin-bottom:20px; border-bottom:1px solid var(--border);"></div>
         <div class="grid" id="mainFeed"></div>
-        <center><button id="loadMoreBtn" onclick="renderMore()" class="sub-btn" style="margin-top:30px; display:none; background:var(--surf); color:var(--text); border:1px solid var(--border);">Показать еще</button></center>
+        <center><button id="loadMoreBtn" onclick="renderMore()" class="sub-btn" style="margin-top:30px; display:none; background:var(--surf); color:var(--text); border:1px solid var(--border);">Еще видео</button></center>
     </div>
 
     <div id="videoPage" class="page">
@@ -198,7 +198,7 @@
     </div>
 
     <div id="regM" class="modal">
-        <h3>Регистрация</h3>
+        <h3>Registration</h3>
         <input type="text" id="rgU" placeholder="Логин (Только латиница, макс 10)" maxlength="10">
         <input type="password" id="rgP" placeholder="Пароль">
         <button class="btn-main" onclick="auth('reg')">Создать</button>
@@ -375,8 +375,9 @@
             document.getElementById('mainFeed').innerHTML = ""; homeStart = 0; renderMore();
         };
 
+        // Подгрузка строго по 16 видео за раз
         window.renderMore = async () => {
-            const end = Math.min(homeStart + 24, homeVids.length);
+            const end = Math.min(homeStart + 16, homeVids.length);
             const f = document.getElementById('mainFeed');
             for (let i = homeStart; i < end; i++) {
                 const v = homeVids[i]; const av = await getAv(v.author);
