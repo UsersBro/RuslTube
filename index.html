@@ -28,7 +28,7 @@
         .card video { width: 100%; aspect-ratio: 16/9; border-radius: 12px; background: #000; object-fit: cover; }
         .card-info { display: flex; gap: 12px; margin-top: 8px; align-items: flex-start; }
         .card-info h4 { margin: 0; font-size: 15px; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-        .card-info p { margin: 1px 0 0 0; font-size: 13px; color: #aaa; }
+        .card-info p { margin: 3px 0 0 0; font-size: 13px; color: #aaa; }
         
         .avatar { width: 40px; height: 40px; border-radius: 50%; background: #444; display: flex; align-items: center; justify-content: center; font-weight: bold; overflow: hidden; object-fit: cover; flex-shrink: 0; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; }
@@ -75,13 +75,19 @@
     <div id="homePage" class="page">
         <div id="searchChannels"></div>
         <div class="grid" id="mainFeed"></div>
+        <div style="text-align:center; margin-top:30px;">
+            <button id="loadMoreBtn" onclick="renderMore()" class="sub-btn" style="display:none; background:#333; color:#fff; border:1px solid #444; padding:10px 30px; height:auto; margin:0 auto;">Показать еще</button>
+        </div>
     </div>
 
     <div id="videoPage" class="page">
         <div class="player-side">
             <video id="vPl" controls autoplay></video>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px;">
-                <h2 id="vT" style="margin:0;"></h2>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-top:15px;">
+                <div>
+                    <h2 id="vT" style="margin:0;"></h2>
+                    <p id="vViewsText" style="color:#aaa; font-size:14px; margin:5px 0 0 0;">0 просмотров</p>
+                </div>
                 <div id="vDelPlace"></div>
             </div>
             <div class="actions">
@@ -149,7 +155,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, where, serverTimestamp, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, where, serverTimestamp, getDoc, deleteDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBw5b72gU3RIBn3NUqwnJz4a7QAf-ox-hg",
@@ -165,6 +171,7 @@
         const CLOUD = "dujfw1ch1"; const PRESET = "RuslTube";
         window.user = localStorage.getItem("rUser");
         let curVid = null; let avCache = {};
+        let homeVids = []; let homeStart = 0;
 
         function esc(str) { return str ? str.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : ""; }
         async function getAv(name) {
@@ -190,6 +197,7 @@
             if (!val) return goHome();
             switchPage('homePage');
             const feed = document.getElementById('mainFeed'); const chBox = document.getElementById('searchChannels');
+            document.getElementById('loadMoreBtn').style.display = 'none';
             feed.innerHTML = "Поиск..."; chBox.innerHTML = ""; chBox.style.display = "none";
             try {
                 const uSnap = await getDocs(collection(db, "users"));
@@ -208,7 +216,7 @@
                     const v = d.data();
                     if (v.title && (v.title.toLowerCase().includes(val) || v.author.toLowerCase().includes(val))) {
                         vidFound = true; const av = await getAv(v.author);
-                        feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><video src="${v.url}#t=1"></video><div class="card-info"><div class="avatar" onclick="event.stopPropagation(); openChannel('${v.author}')">${drawAv(av, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="event.stopPropagation(); openChannel('${v.author}')">@${esc(v.author)}</p></div></div></div>`;
+                        feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><video src="${v.url}#t=1"></video><div class="card-info"><div class="avatar" onclick="event.stopPropagation(); openChannel('${v.author}')">${drawAv(av, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="event.stopPropagation(); openChannel('${v.author}')">@${esc(v.author)} • ${v.views || 0} просмотров</p></div></div></div>`;
                     }
                 }
                 if(!vidFound && !chFound) feed.innerHTML = "Ничего не найдено";
@@ -225,7 +233,7 @@
             const feed = document.getElementById('chFeed'); feed.innerHTML = "";
             snap.forEach(d => {
                 const v = d.data();
-                feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><video src="${v.url}#t=1"></video><div class="card-info" style="justify-content:space-between; width:100%;"><div><h4>${esc(v.title)}</h4></div>${v.author === user ? `<button style="background:#311; color:#f66; border:1px solid #622; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="event.stopPropagation(); deleteVid('${d.id}')">Удалить</button>` : ""}</div></div>`;
+                feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><video src="${v.url}#t=1"></video><div class="card-info" style="justify-content:space-between; width:100%;"><div><h4>${esc(v.title)}</h4><p style="font-size:12px; color:#aaa; margin:3px 0 0 0;">${v.views || 0} просмотров</p></div>${v.author === user ? `<button style="background:#311; color:#f66; border:1px solid #622; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="event.stopPropagation(); deleteVid('${d.id}')">Удалить</button>` : ""}</div></div>`;
             });
         };
 
@@ -270,10 +278,12 @@
 
         window.openV = async (id) => {
             curVid = id; window.scrollTo(0,0);
+            await updateDoc(doc(db, "videos", id), { views: increment(1) }).catch(e=>console.log("View err"));
             const d = (await getDoc(doc(db, "videos", id))).data();
             switchPage('videoPage');
             document.getElementById('vPl').src = d.url;
             document.getElementById('vT').innerText = d.title;
+            document.getElementById('vViewsText').innerText = `${d.views || 1} просмотров`;
             document.getElementById('vA').innerText = "@" + d.author;
             const av = await getAv(d.author);
             document.getElementById('authorAv').innerHTML = drawAv(av, d.author);
@@ -285,22 +295,41 @@
 
         async function loadRecs(id) {
             const snap = await getDocs(collection(db, "videos"));
+            let recs = [];
+            snap.forEach(d => { if(d.id !== id) recs.push({id: d.id, ...d.data()}); });
+            for (let i = recs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [recs[i], recs[j]] = [recs[j], recs[i]];
+            }
+            recs = recs.slice(0, 7);
             const r = document.getElementById('recList'); r.innerHTML = "";
-            snap.forEach(d => {
-                if(d.id === id) return;
-                const v = d.data();
-                r.innerHTML += `<div style="display:flex; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="openV('${d.id}')"><video src="${v.url}#t=1" style="width:140px; aspect-ratio:16/9; border-radius:8px; object-fit:cover;"></video><div><h5 style="margin:0; font-size:13px;">${esc(v.title)}</h5><p style="font-size:11px; color:#aaa; margin:2px 0 0;">@${esc(v.author)}</p></div></div>`;
+            recs.forEach(v => {
+                r.innerHTML += `<div style="display:flex; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="openV('${v.id}')"><video src="${v.url}#t=1" style="width:140px; aspect-ratio:16/9; border-radius:8px; object-fit:cover;"></video><div><h5 style="margin:0; font-size:13px; line-height:1.2; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">${esc(v.title)}</h5><p style="font-size:11px; color:#aaa; margin:3px 0 0;">@${esc(v.author)} • ${v.views || 0} просмотров</p></div></div>`;
             });
         }
 
         window.loadFeed = async () => {
             const snap = await getDocs(collection(db, "videos"));
-            const f = document.getElementById('mainFeed'); f.innerHTML = "";
-            const docs = snap.docs.sort((a,b) => (b.data().createdAt?.seconds || 0) - (a.data().createdAt?.seconds || 0));
-            for (const d of docs) {
-                const v = d.data(); const av = await getAv(v.author);
-                f.innerHTML += `<div class="card" onclick="openV('${d.id}')"><video src="${v.url}#t=1"></video><div class="card-info"><div class="avatar" onclick="event.stopPropagation(); openChannel('${v.author}')">${drawAv(av, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="event.stopPropagation(); openChannel('${v.author}')">@${esc(v.author)}</p></div></div></div>`;
+            homeVids = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            for (let i = homeVids.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [homeVids[i], homeVids[j]] = [homeVids[j], homeVids[i]];
             }
+            document.getElementById('mainFeed').innerHTML = "";
+            homeStart = 0;
+            renderMore();
+        };
+
+        window.renderMore = async () => {
+            const end = Math.min(homeStart + 24, homeVids.length);
+            const f = document.getElementById('mainFeed');
+            for (let i = homeStart; i < end; i++) {
+                const v = homeVids[i];
+                const av = await getAv(v.author);
+                f.innerHTML += `<div class="card" onclick="openV('${v.id}')"><video src="${v.url}#t=1"></video><div class="card-info"><div class="avatar" onclick="event.stopPropagation(); openChannel('${v.author}')">${drawAv(av, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="event.stopPropagation(); openChannel('${v.author}')">@${esc(v.author)} • ${v.views || 0} просмотров</p></div></div></div>`;
+            }
+            homeStart = end;
+            document.getElementById('loadMoreBtn').style.display = (homeStart < homeVids.length) ? 'block' : 'none';
         };
 
         window.upload = async () => {
@@ -310,7 +339,7 @@
             const fd = new FormData(); fd.append('file', f); fd.append('upload_preset', PRESET);
             const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/video/upload`, {method:'POST', body:fd});
             const data = await res.json();
-            await addDoc(collection(db, "videos"), { title: t, url: data.secure_url, author: user, createdAt: serverTimestamp() }); location.reload();
+            await addDoc(collection(db, "videos"), { title: t, url: data.secure_url, author: user, views: 0, createdAt: serverTimestamp() }); location.reload();
         };
 
         window.updateAvatar = async () => {
