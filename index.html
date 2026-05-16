@@ -263,17 +263,22 @@
         }
 
         async function getUserMeta(n) {
+            if(!n) return { av: "", verified: false, id: null };
             if(userMetaCache[n]) return userMetaCache[n];
-            const q = query(collection(db, "users"), where("u", "==", n));
-            const s = await getDocs(q);
-            let meta = { av: "", verified: false, id: null };
-            s.forEach(d => {
-                meta.av = optImg(d.data().av || "");
-                meta.verified = d.data().verified || false;
-                meta.id = d.id;
-            });
-            userMetaCache[n] = meta; 
-            return meta;
+            try {
+                const q = query(collection(db, "users"), where("u", "==", n));
+                const s = await getDocs(q);
+                let meta = { av: "", verified: false, id: null };
+                s.forEach(d => {
+                    meta.av = optImg(d.data().av || "");
+                    meta.verified = d.data().verified || false;
+                    meta.id = d.id;
+                });
+                if (meta.id) userMetaCache[n] = meta;
+                return meta;
+            } catch(e) {
+                return { av: "", verified: false, id: null };
+            }
         }
 
         function drawAv(meta, n) { 
@@ -325,28 +330,27 @@
             const feed = document.getElementById('mainFeed'); const chBox = document.getElementById('searchChannels');
             feed.innerHTML = "Поиск..."; chBox.innerHTML = ""; chBox.style.display = 'none';
             
-            const uS = await getDocs(collection(db, "users"));
-            let cf = false;
-            for(const d of uS.docs) {
-                const u = d.data().u;
-                if(u && u.toLowerCase().includes(v)) {
-                    cf = true;
-                    const meta = await getUserMeta(u);
-                    chBox.innerHTML += `<div class="ch-card" onclick="openChannel('${u}')"><div class="avatar">${drawAv(meta, u)}</div><b style="font-size:12px; margin-top:5px;">@${esc(u)}</b></div>`;
-                }
-            }
-            if(cf) chBox.style.display = 'flex';
-
             const vS = await getDocs(collection(db, "videos"));
-            feed.innerHTML = ""; let found = false;
+            feed.innerHTML = ""; let found = false; let foundAuthors = new Set();
+            
             for(const d of vS.docs) {
                 const vi = d.data();
-                if(vi.title.toLowerCase().includes(v) || vi.author.toLowerCase().includes(v)) {
+                const tMatch = vi.title.toLowerCase().includes(v);
+                const aMatch = vi.author.toLowerCase().includes(v);
+                
+                if(aMatch && !foundAuthors.has(vi.author)) {
+                    foundAuthors.add(vi.author);
+                    const meta = await getUserMeta(vi.author);
+                    chBox.innerHTML += `<div class="ch-card" onclick="openChannel('${vi.author}')"><div class="avatar">${drawAv(meta, vi.author)}</div><b style="font-size:12px; margin-top:5px;">@${esc(vi.author)}</b></div>`;
+                }
+                
+                if(tMatch || aMatch) {
                     found = true; const meta = await getUserMeta(vi.author);
                     feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><div class="thumb-wrap"><img src="${getCardThumb(vi)}" loading="lazy"></div><div class="card-info"><div class="avatar" onclick="navToChannel(event, '${vi.author}')">${drawAv(meta, vi.author)}</div><div><h4>${esc(vi.title)}</h4><p onclick="navToChannel(event, '${vi.author}')">@${esc(vi.author)} • ${vi.views||0} просмотров</p></div></div></div>`;
                 }
             }
-            if(!found && !cf) feed.innerHTML = "Ничего не найдено";
+            if(foundAuthors.size > 0) chBox.style.display = 'flex';
+            if(!found && foundAuthors.size === 0) feed.innerHTML = "Ничего не найдено";
         };
 
         window.openV = async (id) => {
@@ -476,7 +480,8 @@
                 const latReg = /^[A-Za-z0-9]+$/;
                 if(!latReg.test(u)) return alert("Ошибка! Логин должен состоять ТОЛЬКО из латинских букв и цифр!");
                 const q = query(collection(db, "users"), where("u","==",u));
-                if(!(await getDocs(q)).empty) return alert("Логин занят!");
+                const snap = await getDocs(q);
+                if(!snap.empty) return alert("Логин занят!");
                 await addDoc(collection(db, "users"), {u, p, av: "", desc: "", verified: false});
                 localStorage.setItem("rUser", u); location.reload();
             } else {
