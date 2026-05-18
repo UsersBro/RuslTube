@@ -209,7 +209,7 @@
         <label style="font-size:11px; color:#aaa;">Заставка (Обложка) - НЕОБЯЗАТЕЛЬНО:</label>
         <input type="file" id="upThumbF" accept="image/*" style="font-size:11px;">
         <div id="upS" style="font-size:12px; color:var(--blue); margin-top:5px;"></div>
-        <button class="btn-main" onclick="upload()" style="margin-top:10px;">Опубликовать</button>
+        <button class="btn-main" id="uploadActionBtn" onclick="upload()" style="margin-top:10px;">Опубликовать</button>
     </div>
 
     <div id="loginM" class="modal">
@@ -229,7 +229,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, query, where, serverTimestamp, getDoc, deleteDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, setDoc, getDocs, doc, updateDoc, query, where, serverTimestamp, getDoc, deleteDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = { apiKey: "AIzaSyBw5b72gU3RIBn3NUqwnJz4a7QAf-ox-hg", authDomain: "rusltube-ff487.firebaseapp.com", projectId: "rusltube-ff487", storageBucket: "rusltube-ff487.firebasestorage.app", messagingSenderId: "144869005114", appId: "1:144869005114:web:764ec36730b6c8c7012203" };
         const app = initializeApp(firebaseConfig); const db = getFirestore(app);
@@ -264,17 +264,18 @@
 
         async function getUserMeta(n) {
             if(!n) return { av: "", verified: false, id: null };
-            if(userMetaCache[n]) return userMetaCache[n];
+            let key = n.toLowerCase();
+            if(userMetaCache[key]) return userMetaCache[key];
             try {
-                const q = query(collection(db, "users"), where("u", "==", n));
-                const s = await getDocs(q);
+                const dSnap = await getDoc(doc(db, "users", key));
                 let meta = { av: "", verified: false, id: null };
-                s.forEach(d => {
-                    meta.av = optImg(d.data().av || "");
-                    meta.verified = d.data().verified || false;
-                    meta.id = d.id;
-                });
-                if (meta.id) userMetaCache[n] = meta;
+                if (dSnap.exists()) {
+                    const data = dSnap.data();
+                    meta.av = optImg(data.av || "");
+                    meta.verified = data.verified || false;
+                    meta.id = dSnap.id;
+                }
+                userMetaCache[key] = meta;
                 return meta;
             } catch(e) {
                 return { av: "", verified: false, id: null };
@@ -314,8 +315,7 @@
         window.openM = (id) => { 
             closeM(); document.getElementById(id).style.display='block'; document.getElementById('ovl').style.display='block'; 
             if(id === 'settingsM' && user) {
-                const q = query(collection(db, "users"), where("u", "==", user));
-                getDocs(q).then(s => s.forEach(d => document.getElementById('chDescInp').value = d.data().desc || ""));
+                getDoc(doc(db, "users", user.toLowerCase())).then(d => { if(d.exists()) document.getElementById('chDescInp').value = d.data().desc || ""; });
             }
         };
         window.closeM = () => { document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); document.getElementById('ovl').style.display='none'; };
@@ -338,8 +338,8 @@
                 const tMatch = vi.title.toLowerCase().includes(v);
                 const aMatch = vi.author.toLowerCase().includes(v);
                 
-                if(aMatch && !foundAuthors.has(vi.author)) {
-                    foundAuthors.add(vi.author);
+                if(aMatch && !foundAuthors.has(vi.author.toLowerCase())) {
+                    foundAuthors.add(vi.author.toLowerCase());
                     const meta = await getUserMeta(vi.author);
                     chBox.innerHTML += `<div class="ch-card" onclick="openChannel('${vi.author}')"><div class="avatar">${drawAv(meta, vi.author)}</div><b style="font-size:12px; margin-top:5px;">@${esc(vi.author)}</b></div>`;
                 }
@@ -368,7 +368,7 @@
             document.getElementById('authorAv').innerHTML = drawAv(meta, d.author);
             document.getElementById('authorAv').onclick = (e) => openChannel(d.author);
             
-            document.getElementById('vDelPlace').innerHTML = (d.author === user) ? `<button onclick="deleteVid('${id}')" style="background:none; border:none; color:red; cursor:pointer; font-size:12px;">Удалить</button>` : "";
+            document.getElementById('vDelPlace').innerHTML = (user && d.author.toLowerCase() === user.toLowerCase()) ? `<button onclick="deleteVid('${id}')" style="background:none; border:none; color:red; cursor:pointer; font-size:12px;">Удалить</button>` : "";
             updateSubUI(d.author, 'subBtn', 'vSubCount'); updateRatingUI(); loadComms(id); loadRecs(id);
             updateDoc(doc(db, "videos", id), { views: increment(1) }).catch(()=>{});
         };
@@ -396,13 +396,13 @@
             document.getElementById('chAv').innerHTML = drawAv(targetMeta, n);
 
             const adminBtn = document.getElementById('adminVerifyBtn');
-            if(user === "RuslTube") {
+            if(user && user.toLowerCase() === "rusltube") {
                 adminBtn.style.display = "block";
                 adminBtn.innerText = targetMeta.verified ? "Забрать ✓" : "Выдать ✓";
                 adminBtn.onclick = async () => {
                     if(!targetMeta.id) return alert("Ошибка: ID пользователя не найден!");
-                    await updateDoc(doc(db, "users", targetMeta.id), { verified: !targetMeta.verified });
-                    userMetaCache[n].verified = !targetMeta.verified;
+                    await updateDoc(doc(db, "users", targetMeta.id.toLowerCase()), { verified: !targetMeta.verified });
+                    userMetaCache[n.toLowerCase()].verified = !targetMeta.verified;
                     openChannel(n);
                     loadFeed();
                 };
@@ -410,9 +410,9 @@
                 adminBtn.style.display = "none";
             }
             
-            const uS = await getDocs(query(collection(db, "users"), where("u", "==", n)));
+            const uDoc = await getDoc(doc(db, "users", n.toLowerCase()));
             let desc = "Описание канала отсутствует.";
-            uS.forEach(d => { if(d.data().desc) desc = d.data().desc; });
+            if(uDoc.exists() && uDoc.data().desc) desc = uDoc.data().desc;
             document.getElementById('chDescContainer').innerText = desc;
 
             updateSubUI(n, 'chSubBtn', 'chSubs');
@@ -454,72 +454,95 @@
             const t = document.getElementById('upT').value.trim(); const d = document.getElementById('upD').value.trim();
             if(!f || !t) return alert("Выберите видео и введите название!");
             
-            document.getElementById('upS').innerText = "Загрузка видеофайла...";
-            const fdV = new FormData(); fdV.append('file', f); fdV.append('upload_preset', PRESET);
-            const resV = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/video/upload`, {method:'POST', body:fdV});
-            const dataV = await resV.json();
+            const btn = document.getElementById('uploadActionBtn');
+            btn.disabled = true; btn.innerText = "Загрузка...";
             
-            let finalThumbUrl = "";
-            if (thumbF) {
-                document.getElementById('upS').innerText = "Загрузка обложки...";
-                const fdT = new FormData(); fdT.append('file', thumbF); fdT.append('upload_preset', PRESET);
-                const resT = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, {method:'POST', body:fdT});
-                const dataT = await resT.json(); finalThumbUrl = dataT.secure_url;
+            try {
+                document.getElementById('upS').innerText = "Загрузка видеофайла...";
+                const fdV = new FormData(); fdV.append('file', f); fdV.append('upload_preset', PRESET);
+                const resV = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/video/upload`, {method:'POST', body:fdV});
+                const dataV = await resV.json();
+                
+                if(!dataV.secure_url) throw new Error("Cloudinary error");
+                
+                let finalThumbUrl = "";
+                if (thumbF) {
+                    document.getElementById('upS').innerText = "Загрузка обложки...";
+                    const fdT = new FormData(); fdT.append('file', thumbF); fdT.append('upload_preset', PRESET);
+                    const resT = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, {method:'POST', body:fdT});
+                    const dataT = await resT.json(); finalThumbUrl = dataT.secure_url || "";
+                }
+                
+                await addDoc(collection(db, "videos"), { title: t, desc: d, url: dataV.secure_url, thumb: finalThumbUrl, author: user, views: 0, createdAt: serverTimestamp() }); 
+                location.reload();
+            } catch(e) {
+                alert("Ошибка при публикации видео! Проверьте файлы.");
+                btn.disabled = false; btn.innerText = "Опубликовать";
+                document.getElementById('upS').innerText = "";
             }
-            
-            await addDoc(collection(db, "videos"), { title: t, desc: d, url: dataV.secure_url, thumb: finalThumbUrl, author: user, views: 0, createdAt: serverTimestamp() }); 
-            location.reload();
         };
 
         window.auth = async (m) => {
             const u = document.getElementById(m=='reg'?'rgU':'liU').value.trim();
             const p = document.getElementById(m=='reg'?'rgP':'liP').value.trim();
-            if(!u || !p) return;
+            if(!u || !p) return alert("Заполните все поля!");
+            
+            const docRef = doc(db, "users", u.toLowerCase());
             
             if(m=='reg') {
                 const latReg = /^[A-Za-z0-9]+$/;
                 if(!latReg.test(u)) return alert("Ошибка! Логин должен состоять ТОЛЬКО из латинских букв и цифр!");
-                const q = query(collection(db, "users"), where("u","==",u));
-                const snap = await getDocs(q);
-                if(!snap.empty) return alert("Логин занят!");
-                await addDoc(collection(db, "users"), {u, p, av: "", desc: "", verified: false});
-                localStorage.setItem("rUser", u); location.reload();
+                
+                try {
+                    const snap = await getDoc(docRef);
+                    if(snap.exists()) return alert("Логин занят!");
+                    
+                    await setDoc(docRef, {u: u, p: p, av: "", desc: "", verified: false});
+                    localStorage.setItem("rUser", u); location.reload();
+                } catch(e) {
+                    alert("Ошибка регистрации!");
+                }
             } else {
-                const q = query(collection(db, "users"), where("u","==",u), where("p","==",p));
-                const s = await getDocs(q); 
-                if(s.empty) return alert("Неверный логин или пароль!");
-                localStorage.setItem("rUser", u); location.reload();
+                try {
+                    const snap = await getDoc(docRef);
+                    if(!snap.exists() || snap.data().p !== p) return alert("Неверный логин или пароль!");
+                    
+                    localStorage.setItem("rUser", snap.data().u); location.reload();
+                } catch(e) {
+                    alert("Ошибка входа!");
+                }
             }
         };
 
         window.updateChannelData = async () => {
             const text = document.getElementById('chDescInp').value.trim();
-            const q = query(collection(db, "users"), where("u", "==", user));
-            const s = await getDocs(q);
-            await updateDoc(doc(db, "users", s.docs[0].id), { desc: text }); alert("Описание успешно сохранено!");
+            await updateDoc(doc(db, "users", user.toLowerCase()), { desc: text }); alert("Описание успешно сохранено!");
         };
 
         window.updateAvatar = async () => {
             const f = document.getElementById('avF').files[0]; if(!f) return;
-            const fd = new FormData(); fd.append('file', f); fd.append('upload_preset', PRESET);
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, {method:'POST', body:fd});
-            const data = await res.json();
-            const q = query(collection(db, "users"), where("u", "==", user));
-            const s = await getDocs(q); await updateDoc(doc(db, "users", s.docs[0].id), { av: data.secure_url }); location.reload();
+            try {
+                const fd = new FormData(); fd.append('file', f); fd.append('upload_preset', PRESET);
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, {method:'POST', body:fd});
+                const data = await res.json();
+                await updateDoc(doc(db, "users", user.toLowerCase()), { av: data.secure_url }); location.reload();
+            } catch(e) {
+                alert("Ошибка смены аватарки!");
+            }
         };
 
         window.logout = () => { localStorage.removeItem("rUser"); location.reload(); };
 
         window.toggleRate = async (type) => {
             if(!user) return openM('loginM');
-            const qCurrent = query(collection(db, "ratings"), where("vId", "==", curVid), where("u", "==", user));
+            const qCurrent = query(collection(db, "ratings"), where("vId", "==", curVid), where("u", "==", user.toLowerCase()));
             const snapCurrent = await getDocs(qCurrent);
             if(!snapCurrent.empty) {
                 const existData = snapCurrent.docs[0].data();
                 if(existData.type === type) await deleteDoc(doc(db, "ratings", snapCurrent.docs[0].id));
                 else await updateDoc(doc(db, "ratings", snapCurrent.docs[0].id), { type: type });
             } else {
-                await addDoc(collection(db, "ratings"), { vId: curVid, u: user, type: type });
+                await addDoc(collection(db, "ratings"), { vId: curVid, u: user.toLowerCase(), type: type });
             }
             updateRatingUI();
         };
@@ -532,7 +555,7 @@
                 const data = d.data();
                 if(data.type === 'like') likes++;
                 if(data.type === 'dislike') dislikes++;
-                if(data.u === user) myChoice = data.type;
+                if(user && data.u === user.toLowerCase()) myChoice = data.type;
             });
             document.getElementById('likeCount').innerText = likes; document.getElementById('dislikeCount').innerText = dislikes;
             document.getElementById('likeBtn').className = `rate-btn ${myChoice === 'like' ? 'active' : ''}`;
@@ -558,7 +581,7 @@
             for (const d of ds) {
                 const c = d.data(); const meta = await getUserMeta(c.u);
                 let delBtnHtml = "";
-                if(user && (c.u === user || curVidAuthor === user)) {
+                if(user && (c.u.toLowerCase() === user.toLowerCase() || curVidAuthor.toLowerCase() === user.toLowerCase())) {
                     delBtnHtml = `<button class="del-comment-btn" onclick="deleteComment('${d.id}')">[Удалить]</button>`;
                 }
                 l.innerHTML += `<div style="display:flex; gap:12px; margin-bottom:12px;"><div class="avatar" style="width:32px; height:32px; cursor:pointer;" onclick="openChannel('${c.u}')">${drawAv(meta, c.u)}</div><div style="flex:1;"><b style="font-size:13px; cursor:pointer;" onclick="openChannel('${c.u}')">@${esc(c.u)}</b>${delBtnHtml}<p style="margin:2px 0 0; font-size:14px;">${esc(c.t)}</p></div></div>`;
@@ -566,21 +589,21 @@
         }
 
         window.updateSubUI = async (a, bId, cId) => {
-            const qS = query(collection(db, "subs"), where("to", "==", a));
+            const qS = query(collection(db, "subs"), where("to", "==", a.toLowerCase()));
             const count = (await getDocs(qS)).size;
             document.getElementById(cId).innerText = `${count} Подписчиков`;
             const btn = document.getElementById(bId); if(!user || !btn) return;
-            const snap = await getDocs(query(collection(db, "subs"), where("from","==",user), where("to","==",a)));
+            const snap = await getDocs(query(collection(db, "subs"), where("from","==",user.toLowerCase()), where("to","==",a.toLowerCase())));
             btn.innerText = snap.empty ? "Подписаться" : "Вы подписаны";
             btn.className = snap.empty ? "sub-btn" : "sub-btn active";
             btn.onclick = () => toggleSub(a, bId, cId);
         };
 
         window.toggleSub = async (a, bId, cId) => {
-            if(!user) return openM('loginM'); if(a === user) return;
-            const q = query(collection(db, "subs"), where("from","==",user), where("to","==",a));
+            if(!user) return openM('loginM'); if(a.toLowerCase() === user.toLowerCase()) return;
+            const q = query(collection(db, "subs"), where("from","==",user.toLowerCase()), where("to","==",a.toLowerCase()));
             const snap = await getDocs(q);
-            if(snap.empty) await addDoc(collection(db, "subs"), {from:user, to:a});
+            if(snap.empty) await addDoc(collection(db, "subs"), {from:user.toLowerCase(), to:a.toLowerCase()});
             else await deleteDoc(doc(db, "subs", snap.docs[0].id));
             updateSubUI(a, bId, cId);
         };
