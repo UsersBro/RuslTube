@@ -22,13 +22,13 @@
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
         
         .card { cursor: pointer; display: block; width: 100%; }
-        .card .thumb-wrap { width: 100%; aspect-ratio: 16/9; border-radius: 12px; background: #111; overflow: hidden; position: relative; border: 1px solid var(--border); }
+        .card .thumb-wrap { width: 100%; aspect-ratio: 16/9; border-radius: 12px; background: #111; overflow: hidden; position: relative; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: #444; font-size: 40px; }
         .card .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
         .card-info { display: flex; gap: 12px; margin-top: 10px; }
         .card-info h4 { margin: 0; font-size: 14px; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
         .card-info p { margin: 4px 0 0 0; font-size: 12px; color: #888; }
         
-        .avatar { position: relative; width: 38px; height: 38px; border-radius: 50%; background: #444; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .avatar { position: relative; width: 38px; height: 38px; border-radius: 50%; background: #444; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; color: #fff; }
         .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
         .v-badge { position: absolute; bottom: -2px; right: -2px; background: var(--blue); color: white; width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg); z-index: 2; }
         .v-badge svg { width: 10px; height: 10px; }
@@ -46,7 +46,7 @@
         .endscreen-author { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; color: #fff; text-align: center; }
         
         .endscreen-recs { display: flex; gap: 15px; }
-        .endscreen-rec-card { width: 140px; cursor: pointer; background: rgba(255,255,255,0.05); padding: 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .endscreen-rec-card { width: 140px; cursor: pointer; background: rgba(255,255,255,0.05); padding: 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; }
         .endscreen-rec-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 4px; background: #222; }
         .endscreen-rec-card h5 { margin: 6px 0 0 0; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #eee; }
 
@@ -251,15 +251,19 @@
         }
 
         function getCardThumb(v) {
-            if (v.thumb && v.thumb.trim() !== "") return v.thumb;
+            if (v.thumb && v.thumb.trim() !== "") return `<img src="${v.thumb}" loading="lazy">`;
             if (v.url && v.url.includes("cloudinary.com")) {
                 let u = v.url.split('?')[0];
+                if (u.toLowerCase().endsWith('.mov')) {
+                    return `<span style="font-size:40px;">🎬</span>`;
+                }
                 let dot = u.lastIndexOf('.');
                 let slash = u.lastIndexOf('/');
                 if (dot > slash) u = u.substring(0, dot);
-                return u.replace("/video/upload/", "/video/upload/w_600,q_auto/") + ".jpg";
+                let generatedThumb = u.replace("/video/upload/", "/video/upload/w_600,q_auto/") + ".jpg";
+                return `<img src="${generatedThumb}" onerror="this.parentElement.innerHTML='🎬'" loading="lazy">`;
             }
-            return "";
+            return `<span style="font-size:40px;">🎬</span>`;
         }
 
         async function getUserMeta(n) {
@@ -346,7 +350,7 @@
                 
                 if(tMatch || aMatch) {
                     found = true; const meta = await getUserMeta(vi.author);
-                    feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><div class="thumb-wrap"><img src="${getCardThumb(vi)}" loading="lazy"></div><div class="card-info"><div class="avatar" onclick="navToChannel(event, '${vi.author}')">${drawAv(meta, vi.author)}</div><div><h4>${esc(vi.title)}</h4><p onclick="navToChannel(event, '${vi.author}')">@${esc(vi.author)} • ${vi.views||0} просмотров</p></div></div></div>`;
+                    feed.innerHTML += `<div class="card" onclick="openV('${d.id}')"><div class="thumb-wrap">${getCardThumb(vi)}</div><div class="card-info"><div class="avatar" onclick="navToChannel(event, '${vi.author}')">${drawAv(meta, vi.author)}</div><div><h4>${esc(vi.title)}</h4><p onclick="navToChannel(event, '${vi.author}')">@${esc(vi.author)} • ${vi.views||0} просмотров</p></div></div></div>`;
                 }
             }
             if(foundAuthors.size > 0) chBox.style.display = 'flex';
@@ -383,7 +387,7 @@
             let r = s.docs.filter(d => d.id !== curVid).map(d => ({id: d.id, ...d.data()})).sort(() => Math.random() - 0.5).slice(0, 2);
             const box = document.getElementById('endRecsContainer'); box.innerHTML = "";
             r.forEach(v => {
-                box.innerHTML += `<div class="endscreen-rec-card" onclick="event.stopPropagation(); openV('${v.id}')"><img src="${getCardThumb(v)}" loading="lazy"><h5>${esc(v.title)}</h5></div>`;
+                box.innerHTML += `<div class="endscreen-rec-card" onclick="event.stopPropagation(); openV('${v.id}')"><div style="width:100%; aspect-ratio:16/9; display:flex; align-items:center; justify-content:center; background:#222; border-radius:4px; overflow:hidden;">${getCardThumb(v)}</div><h5>${esc(v.title)}</h5></div>`;
             });
             endScreen.style.display = 'flex';
         }
@@ -420,7 +424,7 @@
             const f = document.getElementById('chFeed'); f.innerHTML = "";
             s.forEach(d => {
                 const v = d.data();
-                f.innerHTML += `<div class="card" onclick="openV('${d.id}')"><div class="thumb-wrap"><img src="${getCardThumb(v)}" loading="lazy"></div><div class="card-info"><div><h4>${esc(v.title)}</h4><p>${v.views||0} просмотров</p></div></div></div>`;
+                f.innerHTML += `<div class="card" onclick="openV('${d.id}')"><div class="thumb-wrap">${getCardThumb(v)}</div><div class="card-info"><div><h4>${esc(v.title)}</h4><p>${v.views||0} просмотров</p></div></div></div>`;
             });
         };
 
@@ -435,7 +439,7 @@
             const f = document.getElementById('mainFeed');
             for (let i = homeStart; i < end; i++) {
                 const v = homeVids[i]; const meta = await getUserMeta(v.author);
-                f.innerHTML += `<div class="card" onclick="openV('${v.id}')"><div class="thumb-wrap"><img src="${getCardThumb(v)}" loading="lazy"></div><div class="card-info"><div class="avatar" onclick="navToChannel(event, '${v.author}')">${drawAv(meta, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="navToChannel(event, '${v.author}')">@${esc(v.author)} • ${v.views || 0} просмотров</p></div></div></div>`;
+                f.innerHTML += `<div class="card" onclick="openV('${v.id}')"><div class="thumb-wrap">${getCardThumb(v)}</div><div class="card-info"><div class="avatar" onclick="navToChannel(event, '${v.author}')">${drawAv(meta, v.author)}</div><div><h4>${esc(v.title)}</h4><p onclick="navToChannel(event, '${v.author}')">@${esc(v.author)} • ${v.views || 0} просмотров</p></div></div></div>`;
             }
             homeStart = end; document.getElementById('loadMoreBtn').style.display = (homeStart < homeVids.length) ? 'block' : 'none';
         };
@@ -445,7 +449,7 @@
             let r = s.docs.filter(d => d.id !== id).map(d => ({id: d.id, ...d.data()})).sort(() => Math.random() - 0.5).slice(0, 7);
             const l = document.getElementById('recList'); l.innerHTML = "";
             r.forEach(v => {
-                l.innerHTML += `<div style="display:flex; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="openV('${v.id}')"><img src="${getCardThumb(v)}" style="width:120px; aspect-ratio:16/9; border-radius:8px; object-fit:cover; flex-shrink:0; background:#222;" loading="lazy"><div><h5 style="margin:0; font-size:13px; line-height:1.2;">${esc(v.title)}</h5><p style="font-size:11px; color:#888; margin-top:4px;">@${esc(v.author)}</p></div></div>`;
+                l.innerHTML += `<div style="display:flex; gap:10px; margin-bottom:12px; cursor:pointer;" onclick="openV('${v.id}')"><div style="width:120px; aspect-ratio:16/9; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#222; flex-shrink:0; overflow:hidden;">${getCardThumb(v)}</div><div><h5 style="margin:0; font-size:13px; line-height:1.2;">${esc(v.title)}</h5><p style="font-size:11px; color:#888; margin-top:4px;">@${esc(v.author)}</p></div></div>`;
             });
         };
 
@@ -460,6 +464,7 @@
             try {
                 document.getElementById('upS').innerText = "Загрузка видеофайла...";
                 const fdV = new FormData(); fdV.append('file', f); fdV.append('upload_preset', PRESET);
+                
                 const resV = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/video/upload`, {method:'POST', body:fdV});
                 const dataV = await resV.json();
                 
@@ -473,7 +478,8 @@
                     const dataT = await resT.json(); finalThumbUrl = dataT.secure_url || "";
                 }
                 
-                await addDoc(collection(db, "videos"), { title: t, desc: d, url: dataV.secure_url, thumb: finalThumbUrl, author: user, views: 0, createdAt: serverTimestamp() }); 
+                const newVidRef = doc(collection(db, "videos"));
+                await setDoc(newVidRef, { title: t, desc: d, url: dataV.secure_url, thumb: finalThumbUrl, author: user, views: 0, createdAt: serverTimestamp() }); 
                 location.reload();
             } catch(e) {
                 alert("Ошибка при публикации видео! Проверьте файлы.");
@@ -542,7 +548,8 @@
                 if(existData.type === type) await deleteDoc(doc(db, "ratings", snapCurrent.docs[0].id));
                 else await updateDoc(doc(db, "ratings", snapCurrent.docs[0].id), { type: type });
             } else {
-                await addDoc(collection(db, "ratings"), { vId: curVid, u: user.toLowerCase(), type: type });
+                const newRateRef = doc(collection(db, "ratings"));
+                await setDoc(newRateRef, { vId: curVid, u: user.toLowerCase(), type: type });
             }
             updateRatingUI();
         };
@@ -564,7 +571,8 @@
 
         window.addComm = async () => {
             const t = document.getElementById('cInp').value.trim(); if(!user || !t) return !user ? openM('loginM') : null;
-            await addDoc(collection(db, "comments"), { vId: curVid, u: user, t, createdAt: serverTimestamp() });
+            const newCommRef = doc(collection(db, "comments"));
+            await setDoc(newCommRef, { vId: curVid, u: user, t, createdAt: serverTimestamp() });
             document.getElementById('cInp').value = ""; loadComms(curVid);
         };
 
@@ -603,7 +611,10 @@
             if(!user) return openM('loginM'); if(a.toLowerCase() === user.toLowerCase()) return;
             const q = query(collection(db, "subs"), where("from","==",user.toLowerCase()), where("to","==",a.toLowerCase()));
             const snap = await getDocs(q);
-            if(snap.empty) await addDoc(collection(db, "subs"), {from:user.toLowerCase(), to:a.toLowerCase()});
+            if(snap.empty) {
+                const newSubRef = doc(collection(db, "subs"));
+                await setDoc(newSubRef, {from:user.toLowerCase(), to:a.toLowerCase()});
+            }
             else await deleteDoc(doc(db, "subs", snap.docs[0].id));
             updateSubUI(a, bId, cId);
         };
