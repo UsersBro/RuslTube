@@ -541,15 +541,17 @@
 
         window.toggleRate = async (type) => {
             if(!user) return openM('loginM');
-            const qCurrent = query(collection(db, "ratings"), where("vId", "==", curVid), where("u", "==", user.toLowerCase()));
-            const snapCurrent = await getDocs(qCurrent);
-            if(!snapCurrent.empty) {
-                const existData = snapCurrent.docs[0].data();
-                if(existData.type === type) await deleteDoc(doc(db, "ratings", snapCurrent.docs[0].id));
-                else await updateDoc(doc(db, "ratings", snapCurrent.docs[0].id), { type: type });
+            
+            const rateDocId = `${curVid}_${user.toLowerCase()}`;
+            const rateRef = doc(db, "ratings", rateDocId);
+            
+            const snapCurrent = await getDoc(rateRef);
+            if(snapCurrent.exists()) {
+                const existData = snapCurrent.data();
+                if(existData.type === type) await deleteDoc(rateRef); 
+                else await updateDoc(rateRef, { type: type }); 
             } else {
-                const newRateRef = doc(collection(db, "ratings"));
-                await setDoc(newRateRef, { vId: curVid, u: user.toLowerCase(), type: type });
+                await setDoc(rateRef, { vId: curVid, u: user.toLowerCase(), type: type });
             }
             updateRatingUI();
         };
@@ -601,21 +603,25 @@
             const count = (await getDocs(qS)).size;
             document.getElementById(cId).innerText = `${count} Подписчиков`;
             const btn = document.getElementById(bId); if(!user || !btn) return;
-            const snap = await getDocs(query(collection(db, "subs"), where("from","==",user.toLowerCase()), where("to","==",a.toLowerCase())));
-            btn.innerText = snap.empty ? "Подписаться" : "Вы подписаны";
-            btn.className = snap.empty ? "sub-btn" : "sub-btn active";
-            btn.onclick = () => toggleSub(a, bId, cId);
+            
+            const subDocId = `${user.toLowerCase()}_${a.toLowerCase()}`;
+            const snap = await getDoc(doc(db, "subs", subDocId));
+            btn.innerText = !snap.exists() ? "Подписаться" : "Вы подписаны";
+            btn.className = !snap.exists() ? "sub-btn" : "sub-btn active";
+            btn.onclick = () => toggleSub(a, bId, cId, subDocId);
         };
 
-        window.toggleSub = async (a, bId, cId) => {
+        window.toggleSub = async (a, bId, cId, subDocId) => {
             if(!user) return openM('loginM'); if(a.toLowerCase() === user.toLowerCase()) return;
-            const q = query(collection(db, "subs"), where("from","==",user.toLowerCase()), where("to","==",a.toLowerCase()));
-            const snap = await getDocs(q);
-            if(snap.empty) {
-                const newSubRef = doc(collection(db, "subs"));
-                await setDoc(newSubRef, {from:user.toLowerCase(), to:a.toLowerCase()});
+            
+            const subRef = doc(db, "subs", subDocId);
+            const snap = await getDoc(subRef);
+            
+            if(!snap.exists()) {
+                await setDoc(subRef, {from: user.toLowerCase(), to: a.toLowerCase()});
+            } else {
+                await deleteDoc(subRef);
             }
-            else await deleteDoc(doc(db, "subs", snap.docs[0].id));
             updateSubUI(a, bId, cId);
         };
 
